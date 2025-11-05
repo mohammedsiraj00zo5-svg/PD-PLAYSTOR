@@ -1,0 +1,988 @@
+<!-- ================= PD PLAYSTOR — PART 1 of 3 =================
+     Save all parts and concatenate in order: PART1 + PART2 + PART3
+     Then open the final combined file in browser as index.html
+     ============================================================== -->
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>PD PLAYSTOR — Final (Part 1 of 3)</title>
+  <meta name="robots" content="noindex">
+  <style>
+    /* ======= Theme B styles (shared) ======= */
+    :root{
+      --g1: linear-gradient(135deg,#6EE7B7 0%,#3B82F6 40%,#8B5CF6 70%);
+      --card-grad: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.88));
+      --accent: #3B82F6;
+      --accent-2: #8B5CF6;
+      --muted: #6b7280;
+      --bg: linear-gradient(180deg,#f8fbff 0%, #eef6ff 100%);
+      --glass: rgba(255,255,255,0.75);
+      --red: #ef4444;
+      --shadow: 0 8px 30px rgba(13, 34, 60, 0.08);
+      --CHUNK_SIZE: 5242880; /* 5MB */
+      --MAX_CLIENT_BYTES: 891289600; /* 850MB (kept for reference; final will use 850MB or 891289600 bytes) */
+    }
+    *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Noto Sans",Arial}
+    html,body{height:100%;margin:0;background:var(--bg);color:#0f172a;-webkit-font-smoothing:antialiased}
+    header{background:var(--g1);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:60;box-shadow:var(--shadow)}
+    header .left{display:flex;align-items:center;gap:12px}
+    header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:0.2px}
+    header .right{margin-left:auto;display:flex;gap:10px;align-items:center}
+    .container{max-width:1100px;margin:20px auto;padding:14px}
+    .card{background:var(--card-grad);border-radius:14px;padding:14px;box-shadow:var(--shadow);margin-bottom:16px;border:1px solid rgba(11,132,255,0.06)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .col{flex:1 1 260px;min-width:220px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input,select,textarea,button{font-size:14px;padding:9px 12px;border-radius:10px;border:1px solid rgba(15,23,42,0.06);outline:none;background:rgba(255,255,255,0.9)}
+    button{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(59,130,246,0.14)}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,132,255,0.12)}
+    .small{font-size:13px;padding:6px 10px;border-radius:10px}
+    .files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:12px}
+    .file-card{border-radius:12px;border:1px solid rgba(59,130,246,0.06);padding:10px;display:flex;flex-direction:column;gap:10px;min-height:180px;position:relative;overflow:hidden;background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.96))}
+    .thumb{height:150px;border-radius:10px;overflow:hidden;background:linear-gradient(180deg,#eef8ff,#f6f9ff);display:flex;align-items:center;justify-content:center;position:relative}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .play-overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:linear-gradient(180deg,rgba(0,0,0,0.45),rgba(0,0,0,0.35));display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;transition:transform .14s}
+    .play-overlay:hover{transform:translate(-50%,-50%) scale(1.06)}
+    .play-overlay svg{width:26px;height:26px;fill:#fff;margin-left:4px}
+    .meta strong{display:block;font-size:15px;margin-bottom:4px;color:#06264a}
+    .meta .sub{font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .hint{font-size:13px;color:var(--muted)}
+    footer{padding:14px;text-align:center;color:var(--muted);font-size:13px}
+    .modal{display:none;position:fixed;inset:0;background:rgba(6,10,18,0.55);align-items:center;justify-content:center;padding:18px;z-index:120}
+    .modal .modal-card{width:100%;max-width:980px;max-height:92vh;overflow:auto;border-radius:12px}
+    .editor{width:100%;height:360px;font-family:monospace;font-size:13px;border-radius:10px}
+    .viewer-red{background:linear-gradient(90deg,#ff5f6d,#ff2d55);color:#fff;border:none;box-shadow:0 6px 18px rgba(255,47,85,0.14)}
+    .note{font-size:12px;color:#9aa7bf}
+    .progress-bar { height:10px;background:#e6f0ff;border-radius:6px;overflow:hidden }
+    .progress-bar > div { height:100%; width:0%; background:linear-gradient(90deg,#3b82f6,#8b5cf6) }
+    @media (max-width:760px){
+      .row{flex-direction:column}
+      .col{min-width:unset}
+      .thumb{height:200px}
+      .editor{height:220px}
+      header h1{font-size:16px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <button id="btnViewerInfoHeader" class="viewer-red small">Viewer Info</button>
+      <h1>PD PLAYSTOR</h1>
+    </div>
+    <div class="right">
+      <div class="hint" id="statusText">Viewer mode</div>
+      <button id="btnOpenLogin" class="ghost small">Admin Login</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- UPLOAD / SEARCH CARD (admin controls hidden until login) -->
+    <section class="card">
+      <div class="row" style="align-items:center">
+        <div class="col">
+          <label>Search (by Title)</label>
+          <div style="display:flex;gap:10px">
+            <input id="searchInput" placeholder="Search by title..." />
+            <button id="btnSearch">Search</button>
+            <button id="btnClear" class="ghost">Clear</button>
+          </div>
+        </div>
+
+        <!-- Admin controls shown only for logged-in admin (JS will toggle) -->
+        <div class="col" id="adminControls" style="display:none">
+          <label>Upload .html (Admin)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="fileInput" type="file" accept=".html" />
+            <input id="thumbInput" type="file" accept="image/*" />
+            <input id="titleInput" placeholder="Title (required)" />
+            <input id="filePassword" placeholder="Optional file password" class="small" />
+            <button id="btnUpload">Upload</button>
+          </div>
+          <div class="hint">Title दिखेगा viewers को. Password optional है — छोड़ सकते हैं.</div>
+          <div class="note">Client-side limit & chunking configured: 850MB max, 5MB chunks. Server recommended.</div>
+          <div style="margin-top:8px"><div class="progress-bar" id="uploadProgress" style="display:none"><div></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILE LIST -->
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h3 style="margin:0">Available Files</h3>
+        <div class="hint" id="countFiles">0 files</div>
+      </div>
+      <div id="filesList" class="files-grid" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <!-- ========== Login Modal (Admin) ========== -->
+  <div id="loginModal" class="modal" aria-hidden="true">
+    <div class="modal-card card">
+      <h3 style="margin:0 0 8px 0">Admin Login</h3>
+      <label>Enter admin password</label>
+      <input id="adminPwd" type="password" autocomplete="new-password" />
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="btnLogin">Login</button>
+        <button id="btnCloseLogin" class="ghost">Close</button>
+      </div>
+      <hr style="margin:12px 0" />
+      <div id="adminPanel" style="display:none">
+        <label>Admin actions</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button id="btnLogout" class="ghost">Logout</button>
+          <button id="btnChangePwd" class="ghost">Change Admin Password</button>
+          <button id="btnReset" class="ghost">Reset Storage</button>
+          <button id="btnShowAbout" class="ghost">About / Help</button>
+        </div>
+        <div id="changePwdBox" style="display:none;margin-top:8px">
+          <label>New password</label>
+          <input id="newPwd" type="password" />
+          <button id="btnDoChange">Change</button>
+        </div>
+      </div>
+      <div id="loginHint" class="hint" style="margin-top:8px">Default admin password: <strong>pdstor@101865</strong></div>
+    </div>
+  </div>
+
+  <!-- ========== Viewer Info Modal (Hinglish message format) ========== -->
+  <div id="viewerModal" class="modal" aria-hidden="true">
+    <div class="modal-card card">
+      <h3 style="margin:0 0 8px 0">Viewer Information</h3>
+      <label>Full name</label>
+      <input id="viewerName" placeholder="Your full name" />
+      <label style="margin-top:8px">Email</label>
+      <input id="viewerEmail" placeholder="you@example.com" />
+      <label style="margin-top:8px">Phone</label>
+      <input id="viewerPhone" placeholder="eg. +919876543210 or 9876543210" />
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="btnSubmitViewer" class="viewer-red">Submit & Send to WhatsApp</button>
+        <button id="btnCloseViewer" class="ghost">Close</button>
+      </div>
+      <div class="hint" style="margin-top:8px;color:var(--muted)">Sab fields bharna zaroori hai — tabhi WhatsApp khulega.</div>
+    </div>
+  </div>
+
+  <!-- ========== Player modal will be inserted in Part 3 ========== -->
+  <!-- ========== Editor modal will be inserted in Part 2 ========== -->
+
+  <footer>Made with ❤️ — PD PLAYSTOR. </footer>
+
+  <!-- ======= Base JS (Part 1) - UI helpers & config ======= -->
+  <script>
+    /* ====== CONFIG ====== */
+    const API_BASE = ''; // set server URL if you have backend, else leave empty
+    const DEFAULT_ADMIN_PWD = 'pdstor@101865'; // client-fallback admin password
+    const CHUNK_SIZE = Number(getComputedStyle(document.documentElement).getPropertyValue('--CHUNK_SIZE')) || 5242880;
+    const MAX_CLIENT_BYTES = Number(getComputedStyle(document.documentElement).getPropertyValue('--MAX_CLIENT_BYTES')) || 891289600;
+    const WHATSAPP_NUMBER = '918747868063';
+
+    /* ====== Small helpers ====== */
+    function uid(){ return 'c_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8) }
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function showModal(id){ const m=document.getElementById(id); if(m){ m.style.display='flex'; m.setAttribute('aria-hidden','false'); } }
+    function hideModal(id){ const m=document.getElementById(id); if(m){ m.style.display='none'; m.setAttribute('aria-hidden','true'); } }
+    function isAdmin(){ return !!sessionStorage.getItem('admin_token') || sessionStorage.getItem('client_admin') === '1'; }
+    function setClientAdminFlag(){ sessionStorage.setItem('client_admin','1'); sessionStorage.removeItem('admin_token'); updateStatus(); }
+    function clearClientAdminFlag(){ sessionStorage.removeItem('client_admin'); updateStatus(); }
+    function setAdminToken(token){ if(token){ sessionStorage.setItem('admin_token', token); sessionStorage.removeItem('client_admin'); } else { sessionStorage.removeItem('admin_token'); sessionStorage.removeItem('client_admin'); } updateStatus(); }
+    function openWhatsAppMessage(number, message){ window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank'); }
+
+    /* ====== Wire up basic UI events (Part 1) ====== */
+    document.getElementById('btnOpenLogin').addEventListener('click', ()=>{ showModal('loginModal'); updateStatus(); });
+    document.getElementById('btnCloseLogin').addEventListener('click', ()=>{ hideModal('loginModal'); });
+    document.getElementById('btnViewerInfoHeader').addEventListener('click', ()=>{ showModal('viewerModal'); });
+    document.getElementById('btnCloseViewer').addEventListener('click', ()=>{ hideModal('viewerModal'); });
+
+    // Viewer submit (Hinglish message)
+    document.getElementById('btnSubmitViewer').addEventListener('click', ()=>{
+      const name = document.getElementById('viewerName').value.trim();
+      const email = document.getElementById('viewerEmail').value.trim();
+      const phone = document.getElementById('viewerPhone').value.trim();
+      if(!name || !email || !phone){ alert('Please fill Name, Email, Phone — tabhi WhatsApp khulega.'); return; }
+      const message = `Naya viewer info:%0AName: ${name}%0AEmail: ${email}%0APhone: ${phone}%0ATime: ${new Date().toLocaleString()}`;
+      openWhatsAppMessage(WHATSAPP_NUMBER, decodeURIComponent(message));
+      hideModal('viewerModal');
+      alert('WhatsApp window opened — please press Send in WhatsApp to complete.');
+    });
+
+    // Login (Part1 will provide client fallback; server login handled in Part2)
+    document.getElementById('btnLogin').addEventListener('click', async ()=>{
+      const pwd = document.getElementById('adminPwd').value;
+      if(!pwd){ alert('Enter password'); return; }
+      // try server login if API_BASE present (server code in Part 2 will handle)
+      if(API_BASE){
+        try{
+          const res = await fetch(API_BASE + '/admin/login', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ password: pwd }) });
+          const j = await res.json();
+          if(res.ok && j.token){ setAdminToken(j.token); hideModal('loginModal'); document.getElementById('adminPwd').value = ''; alert('Admin logged in (server)'); await loadFiles(); return; }
+        }catch(e){ /* server unreachable; fallback below */ }
+      }
+      // client fallback
+      const localPwd = localStorage.getItem('pd_client_admin_pwd') || DEFAULT_ADMIN_PWD;
+      if(pwd === localPwd){ setClientAdminFlag(); hideModal('loginModal'); document.getElementById('adminPwd').value=''; alert('Admin logged in (client fallback)'); updateStatus(); await loadFiles(); return; }
+      alert('Wrong password');
+    });
+    document.getElementById('btnLogout').addEventListener('click', ()=>{ sessionStorage.removeItem('admin_token'); clearClientAdminFlag(); alert('Logged out'); loadFiles(); });
+
+    // basic search hooks (actual search implementation in Part2/Part3)
+    document.getElementById('btnSearch').addEventListener('click', ()=>{ if(typeof searchFiles === 'function') searchFiles(); else alert('Search initializing...'); });
+    document.getElementById('btnClear').addEventListener('click', ()=>{ document.getElementById('searchInput').value=''; if(typeof loadFiles === 'function') loadFiles(); });
+
+    // update UI based on admin state
+    function updateStatus(){
+      const s = document.getElementById('statusText'); s.innerText = isAdmin()? 'Admin mode':'Viewer mode';
+      document.getElementById('btnOpenLogin').innerText = isAdmin()? 'Admin' : 'Admin Login';
+      document.getElementById('adminControls').style.display = isAdmin()? 'block' : 'none';
+      document.getElementById('adminPanel').style.display = isAdmin()? 'block' : 'none';
+      document.getElementById('loginHint').style.display = isAdmin()? 'none' : 'block';
+    }
+    // initial update
+    updateStatus();
+
+    /* 
+      NOTE PART 1: Functions like loadFiles(), searchFiles(), upload handling,
+      chunk-storage, editor, play, password-check etc. will be provided in Part 2 and Part 3.
+    */
+  </script>
+
+  <!-- PART 1 END - Insert PART 2 here when combining -->
+  <!-- INSERT PART 2 HERE -->
+</body>
+<!-- ================= PD PLAYSTOR — PART 3 of 3 =================
+  Paste this after Part 1 and Part 2 in the combined index.html.
+  Provides: IndexedDB, chunked upload (5MB), resume, password-protect-on-play,
+  player modal, editor modal, admin edit/delete, search/load, reset.
+  ================================================================== -->
+
+<!-- ======= Editor Modal (insert if not present) ======= -->
+<div id="editorModal" class="modal" aria-hidden="true">
+  <div class="modal-card">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <h3 id="editorTitle">Edit File</h3>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button id="btnSaveEdit">Save</button>
+        <button id="btnCloseEditor" class="ghost">Close</button>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label>Title</label>
+      <input id="editTitle" />
+      <label style="margin-top:8px">Replace HTML file (optional)</label>
+      <input id="editReplaceFile" type="file" accept=".html" />
+      <label style="margin-top:8px">Filename (read-only)</label>
+      <input id="editFilename" readonly />
+      <label style="margin-top:8px">File password (leave blank = none)</label>
+      <input id="editFilePassword" />
+      <label style="margin-top:8px">Replace Thumbnail (optional)</label>
+      <input id="editThumb" type="file" accept="image/*" />
+      <label style="margin-top:8px">HTML Content</label>
+      <textarea id="editorArea" class="editor"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ======= Player Modal (insert if not present) ======= -->
+<div id="playerModal" class="modal" aria-hidden="true" style="display:none;background:#000;align-items:flex-start;padding:0">
+  <div style="width:100%;height:100vh;position:relative">
+    <iframe id="playerFrame" style="width:100%;height:100vh;border:none;background:#000"></iframe>
+    <div style="position:absolute;right:12px;top:12px;display:flex;gap:8px">
+      <button id="btnOpenInNew" class="ghost small">Open in new</button>
+      <button id="btnExitPlayer" class="ghost small">Exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= PART 3 JS: FULL FUNCTIONALITY =================
+   - IndexedDB stores: files (metadata), chunks (fileId,index,blob), uploads (tracking)
+   - loadFiles() loads from server (preferred) or from IndexedDB fallback
+   - searchFiles() filters
+   - upload: chunked 5MB, resume support using uploads store
+   - server integration: tries ADMIN_UPLOAD_CHUNK_API / ADMIN_UPLOAD_COMPLETE_API if API_BASE set
+   - password protection: stored as SHA-256 hex in metadata (client-side) or validated by server
+   - edit/delete: supports server endpoints when available, else client-IDB edit/delete
+   ================================================================== */
+
+(async function PART3_INIT(){
+  // re-use config from Part-1
+  const ADMIN_UPLOAD_CHUNK_API = API_BASE ? API_BASE + '/admin/upload-chunk' : '';
+  const ADMIN_UPLOAD_COMPLETE_API = API_BASE ? API_BASE + '/admin/upload-complete' : '';
+  const ADMIN_LOGIN_API = API_BASE ? API_BASE + '/admin/login' : '';
+  const FILES_LIST_API = API_BASE ? API_BASE + '/files' : '';
+  const FILE_OPEN_API = id => API_BASE ? API_BASE + `/file/${id}/open` : '';
+  const FILE_SERVE_API = id => API_BASE ? API_BASE + `/file/${id}` : '';
+
+  /* ---------- IndexedDB helpers ---------- */
+  function openIDB(){
+    return new Promise((res, rej)=>{
+      const r = indexedDB.open('pd_playstor_db_v3', 2);
+      r.onupgradeneeded = ()=> {
+        const db = r.result;
+        if(!db.objectStoreNames.contains('files')) db.createObjectStore('files',{ keyPath: 'id' });
+        if(!db.objectStoreNames.contains('chunks')){
+          const s = db.createObjectStore('chunks',{ keyPath: ['fileId','index'] });
+          s.createIndex('fileId_idx','fileId', { unique:false });
+        }
+        if(!db.objectStoreNames.contains('uploads')) db.createObjectStore('uploads',{ keyPath:'fileId' });
+      };
+      r.onsuccess = ()=> res(r.result);
+      r.onerror = ()=> rej(r.error);
+    });
+  }
+
+  async function idbPut(store, value){
+    const db = await openIDB();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction(store,'readwrite'), s = tx.objectStore(store);
+      s.put(value);
+      tx.oncomplete = ()=> res();
+      tx.onerror = ()=> rej(tx.error);
+    });
+  }
+  async function idbGet(store, key){
+    const db = await openIDB();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction(store,'readonly'), s = tx.objectStore(store);
+      const req = s.get(key);
+      req.onsuccess = ()=> res(req.result);
+      req.onerror = ()=> rej(req.error);
+    });
+  }
+  async function idbDelete(store, key){
+    const db = await openIDB();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction(store,'readwrite'), s = tx.objectStore(store);
+      s.delete(key);
+      tx.oncomplete = ()=> res();
+      tx.onerror = ()=> rej(tx.error);
+    });
+  }
+  async function idbGetAll(store){
+    const db = await openIDB();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction(store,'readonly'), s = tx.objectStore(store);
+      const req = s.getAll();
+      req.onsuccess = ()=> res(req.result);
+      req.onerror = ()=> rej(req.error);
+    });
+  }
+  async function idbGetChunksFor(fileId){
+    const db = await openIDB();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction('chunks','readonly'), s = tx.objectStore('chunks');
+      const idx = s.index('fileId_idx');
+      const req = idx.getAll(IDBKeyRange.only(fileId));
+      req.onsuccess = ()=> {
+        const out = req.result.sort((a,b)=>a.index-b.index);
+        res(out);
+      }
+      req.onerror = ()=> rej(req.error);
+    });
+  }
+
+  /* ---------- crypto helper (SHA-256 hex) ---------- */
+  async function sha256hex(message){
+    const enc = new TextEncoder().encode(message);
+    const h = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  /* ---------- UI helpers ---------- */
+  function setProgress(percent){
+    const p = document.getElementById('uploadProgress');
+    if(!p) return;
+    const inner = p.querySelector('div');
+    if(percent === null){ p.style.display = 'none'; inner.style.width = '0%'; }
+    else { p.style.display = 'block'; inner.style.width = Math.round(percent) + '%'; }
+  }
+
+  /* ---------- Load files (server first, fallback to IDB) ---------- */
+  async function loadFiles(){
+    // try server
+    try{
+      if(FILES_LIST_API){
+        const res = await fetch(FILES_LIST_API);
+        if(res.ok){
+          const arr = await res.json();
+          renderFiles(arr.map(it=>({
+            id: it.id,
+            title: it.title,
+            filename: it.filename,
+            created: it.created,
+            thumbUrl: it.thumbUrl || null,
+            source: 'server',
+            passwordProtected: !!it.filePasswordHash
+          })));
+          return;
+        }
+      }
+    }catch(e){
+      // server not reachable — fallback
+    }
+
+    // fallback: load client
+    const files = await idbGetAll('files');
+    const items = (files || []).map(f=>({
+      id: f.id,
+      title: f.title,
+      filename: f.filename,
+      created: f.created,
+      thumbUrl: f.thumbBase64 || null,
+      source: 'client',
+      passwordProtected: !!f.filePasswordHash
+    }));
+    renderFiles(items);
+  }
+
+  /* ---------- renderFiles (used by Part1 UI) ---------- */
+  function renderFiles(items){
+    const list = document.getElementById('filesList');
+    list.innerHTML = '';
+    document.getElementById('countFiles').innerText = (items || []).length + ' files';
+    (items || []).forEach(item=>{
+      const card = document.createElement('div'); card.className = 'file-card';
+      const th = document.createElement('div'); th.className = 'thumb';
+      if(item.thumbUrl){
+        const img = document.createElement('img'); img.src = item.thumbUrl; th.appendChild(img);
+      } else {
+        th.innerHTML = `<div style="text-align:center;padding:8px;color:var(--muted)">${escapeHtml((item.title||item.filename||'No title').slice(0,28))}</div>`;
+      }
+      const overlay = document.createElement('div'); overlay.className = 'play-overlay'; overlay.title = 'Play';
+      overlay.innerHTML = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M4 2v20l18-10L4 2z"/></svg>`;
+      overlay.addEventListener('click', ()=> openFileWithPasswordPrompt(item.id, item.title, item.source, item.passwordProtected));
+      th.appendChild(overlay);
+      card.appendChild(th);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const sub = document.createElement('div'); sub.className='sub';
+      sub.innerText = `${item.filename || ''} • Uploaded: ${new Date(item.created || Date.now()).toLocaleString()}`;
+      if(item.passwordProtected) {
+        const lock = document.createElement('span'); lock.style.marginLeft = '8px'; lock.innerText='🔒';
+        sub.appendChild(lock);
+      }
+      meta.innerHTML = `<strong>${escapeHtml(item.title)}</strong>`;
+      meta.appendChild(sub);
+      card.appendChild(meta);
+
+      const actions = document.createElement('div'); actions.className = 'actions';
+      if(isAdmin()){
+        const e = document.createElement('button'); e.className='ghost small'; e.innerText = 'Edit'; e.addEventListener('click', ()=> openEditor(item.id, item.source));
+        const d = document.createElement('button'); d.className='ghost small'; d.innerText = 'Delete'; d.addEventListener('click', ()=> deleteFile(item.id, item.source));
+        actions.appendChild(e); actions.appendChild(d);
+      }
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
+  /* ---------- searchFiles ---------- */
+  async function searchFiles(){
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    if(!q){ await loadFiles(); return; }
+    // try server-filter
+    try{
+      if(FILES_LIST_API){
+        const res = await fetch(FILES_LIST_API);
+        if(res.ok){
+          const arr = await res.json();
+          const filtered = arr.filter(x=> (x.title||'').toLowerCase().includes(q)).map(it=>({ id:it.id, title:it.title, filename:it.filename, created:it.created, thumbUrl:it.thumbUrl||null, source:'server', passwordProtected: !!it.filePasswordHash }));
+          renderFiles(filtered);
+          return;
+        }
+      }
+    }catch(e){}
+    // client filter
+    const files = await idbGetAll('files');
+    const filtered = (files || []).filter(f=> (f.title||'').toLowerCase().includes(q)).map(f=>({ id:f.id, title:f.title, filename:f.filename, created:f.created, thumbUrl:f.thumbBase64||null, source:'client', passwordProtected: !!f.filePasswordHash }));
+    renderFiles(filtered);
+  }
+
+  // expose loadFiles & searchFiles for Part1 hooks
+  window.loadFiles = loadFiles;
+  window.searchFiles = searchFiles;
+
+  /* ---------- Upload: detect server support ---------- */
+  async function detectServerChunkSupport(){
+    if(!ADMIN_UPLOAD_CHUNK_API) return false;
+    try{
+      const res = await fetch(ADMIN_UPLOAD_CHUNK_API, { method:'OPTIONS' });
+      return res.ok || res.status === 200 || res.status === 204;
+    }catch(e){ return false; }
+  }
+
+  /* ---------- Upload to server (chunked) ---------- */
+  async function uploadChunksToServer(file, fileId, title, password, thumbBase64){
+    if(!ADMIN_UPLOAD_CHUNK_API || !ADMIN_UPLOAD_COMPLETE_API) throw new Error('Server chunk endpoints not configured');
+    const total = Math.ceil(file.size / CHUNK_SIZE);
+    const token = sessionStorage.getItem('admin_token') || '';
+    for(let i=0;i<total;i++){
+      const start = i*CHUNK_SIZE, end = Math.min(file.size, start + CHUNK_SIZE);
+      const blob = file.slice(start,end);
+      const fd = new FormData();
+      fd.append('chunk', blob);
+      fd.append('fileId', fileId);
+      fd.append('index', i);
+      fd.append('total', total);
+      fd.append('filename', file.name);
+      if(i===0) {
+        fd.append('title', title);
+        if(password) fd.append('password', password);
+        if(thumbBase64) fd.append('thumbBase64', thumbBase64);
+      }
+      const res = await fetch(ADMIN_UPLOAD_CHUNK_API, { method:'POST', headers: token? { 'x-admin-token': token } : {}, body: fd });
+      if(!res.ok) throw new Error('Chunk upload failed at index ' + i);
+      setProgress(((i+1)/total)*100);
+    }
+    // finalize
+    const finalize = await fetch(ADMIN_UPLOAD_COMPLETE_API, { method:'POST', headers: { 'Content-Type':'application/json', ...(token? {'x-admin-token': token} : {}) }, body: JSON.stringify({ fileId, filename: file.name, title, totalChunks: Math.ceil(file.size/CHUNK_SIZE) }) });
+    if(!finalize.ok) throw new Error('Finalize failed');
+    setProgress(null);
+  }
+
+  /* ---------- Store chunks in IndexedDB with resume ---------- */
+  async function storeFileChunksInIDB(file, fileId, showProgress=true){
+    const total = Math.ceil(file.size / CHUNK_SIZE);
+    const uploadRec = (await idbGet('uploads', fileId)) || { fileId, uploadedChunks: [], totalChunks: total };
+    const uploadedSet = new Set((uploadRec.uploadedChunks || []).map(n=>n|0));
+    for(let i=0;i<total;i++){
+      if(uploadedSet.has(i)){
+        if(showProgress) setProgress(((i+1)/total)*100);
+        continue;
+      }
+      const start = i*CHUNK_SIZE, end = Math.min(file.size, start + CHUNK_SIZE);
+      const blob = file.slice(start,end);
+      await idbPut('chunks', { fileId, index: i, blob });
+      uploadRec.uploadedChunks = uploadRec.uploadedChunks || []; uploadRec.uploadedChunks.push(i);
+      uploadRec.lastUpdated = Date.now();
+      await idbPut('uploads', uploadRec);
+      if(showProgress) setProgress(((i+1)/total)*100);
+    }
+    if(showProgress) setTimeout(()=>setProgress(null), 300);
+  }
+
+  /* ---------- Helper: file to base64 (thumbnail) ---------- */
+  function fileToBase64(file){
+    return new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.onerror = e => rej(e);
+      r.readAsDataURL(file);
+    });
+  }
+
+  /* ---------- Hook upload button (Part1 adminControls) ---------- */
+  const uploadBtn = document.getElementById('btnUpload');
+  if(uploadBtn) uploadBtn.addEventListener('click', async ()=>{
+    if(!isAdmin()){ alert('Only admin can upload'); return; }
+    const fileEl = document.getElementById('fileInput');
+    if(!fileEl || !fileEl.files.length) { alert('Please choose an .html file'); return; }
+    const file = fileEl.files[0];
+    if(!file.name.toLowerCase().endsWith('.html')){
+      if(!confirm('Filename does not end with .html. Continue?')) return;
+    }
+    if(file.size > MAX_CLIENT_BYTES){ alert('File too large (client limit 850MB)'); return; }
+    const thumbFile = document.getElementById('thumbInput').files[0];
+    const title = (document.getElementById('titleInput').value || '').trim();
+    if(!title){ alert('Title required'); return; }
+    const pwd = (document.getElementById('filePassword').value || '').trim();
+
+    const fileId = uid();
+    const now = Date.now();
+    const meta = { id:fileId, title, filename:file.name, size: file.size, created: now, updated: now, thumbBase64: null };
+
+    if(thumbFile) meta.thumbBase64 = await fileToBase64(thumbFile);
+    if(pwd) meta.filePasswordHash = await sha256hex(pwd);
+
+    // store metadata to IDB immediately (so it appears in list)
+    await idbPut('files', meta);
+    await idbPut('uploads', { fileId, uploadedChunks: [], totalChunks: Math.ceil(file.size/CHUNK_SIZE), lastUpdated: Date.now() });
+
+    // try server if available & supports chunk API and we have admin token
+    const serverOk = await detectServerChunkSupport();
+    if(serverOk && sessionStorage.getItem('admin_token')){
+      try{
+        setProgress(0);
+        await uploadChunksToServer(file, fileId, title, pwd, meta.thumbBase64);
+        // optional: remove upload record local or mark as server
+        await idbDelete('uploads', fileId);
+        // fetch server list next
+        await loadFiles();
+        alert('Upload complete (server).');
+        document.getElementById('fileInput').value=''; document.getElementById('thumbInput').value=''; document.getElementById('titleInput').value=''; document.getElementById('filePassword').value='';
+        return;
+      }catch(err){
+        console.warn('Server upload failed, falling back to client storage', err);
+      }
+    }
+
+    // client fallback: store chunks into IndexedDB (with resume)
+    try{
+      setProgress(0);
+      await storeFileChunksInIDB(file, fileId, true);
+      alert('Upload saved locally (IndexedDB). Visitors on this device can play it.');
+      document.getElementById('fileInput').value=''; document.getElementById('thumbInput').value=''; document.getElementById('titleInput').value=''; document.getElementById('filePassword').value='';
+      await loadFiles();
+    }catch(e){
+      console.error(e); alert('Upload failed: ' + (e.message || e));
+    } finally {
+      setProgress(null);
+    }
+  });
+
+  /* ---------- Open file with password-check on Play (Option A behavior) ---------- */
+  async function openFileWithPasswordPrompt(id, title, source='client', passwordProtected=false){
+    if(source === 'server' && FILE_OPEN_API(id)){
+      // try server first
+      try{
+        // first try without password
+        const res = await fetch(FILE_OPEN_API(id), { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({}) });
+        if(res.ok){ const j = await res.json(); openPlayer(j.url); return; }
+        const j = await res.json();
+        if(res.status === 401 || j.error === 'password required' || passwordProtected){
+          const pwd = prompt(`"${title}" password required. Enter file password:`);
+          if(!pwd) return;
+          const res2 = await fetch(FILE_OPEN_API(id), { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ password: pwd }) });
+          const j2 = await res2.json();
+          if(!res2.ok){ alert(j2.error || 'Wrong password'); return; }
+          openPlayer(j2.url); return;
+        }
+        alert(j.error || 'Cannot open file (server)');
+        return;
+      }catch(e){ console.error(e); alert('Server open error'); return; }
+    }
+
+    // client-side: check metadata filePasswordHash stored in files store
+    const meta = await idbGet('files', id);
+    if(!meta){ alert('File metadata missing'); return; }
+    if(meta.filePasswordHash){
+      const pwd = prompt(`"${title}" password required. Enter file password:`);
+      if(!pwd) return;
+      const h = await sha256hex(pwd);
+      if(h !== meta.filePasswordHash){ alert('Wrong password'); return; }
+    }
+
+    // assemble chunks
+    const chunks = await idbGetChunksFor(id);
+    if(!chunks || chunks.length === 0){ alert('File chunks missing or upload incomplete'); return; }
+    const blob = new Blob(chunks.map(c=>c.blob), { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    openPlayer(url);
+  }
+
+  function openPlayer(url){
+    const frame = document.getElementById('playerFrame');
+    frame.src = url;
+    showModal('playerModal');
+    try{ frame.requestFullscreen?.(); }catch(e){}
+  }
+  document.getElementById('btnExitPlayer').addEventListener('click', ()=>{ hideModal('playerModal'); try{ document.exitFullscreen(); }catch(e){} });
+  document.getElementById('btnOpenInNew').addEventListener('click', ()=>{ const src = document.getElementById('playerFrame').src; if(src) window.open(src,'_blank'); });
+
+  /* ---------- Editor: open, save (server or client) ---------- */
+  async function openEditor(id, source='client'){
+    if(source === 'server' && FILES_LIST_API){
+      try{
+        const res = await fetch(FILES_LIST_API);
+        const arr = await res.json();
+        const f = arr.find(x=>x.id===id);
+        if(!f){ alert('File not found on server'); return; }
+        document.getElementById('editorModal').style.display='flex';
+        document.getElementById('editorModal').dataset.editing = id;
+        document.getElementById('editorTitle').innerText = 'Edit — ' + f.title;
+        document.getElementById('editTitle').value = f.title;
+        document.getElementById('editFilename').value = f.filename;
+        try{ const txt = await (await fetch(FILE_SERVE_API(id))).text(); document.getElementById('editorArea').value = txt; } catch(e){ document.getElementById('editorArea').value = '<Cannot load content>'; }
+        return;
+      }catch(e){ console.error(e); alert('Server error'); }
+    }
+    // client
+    const meta = await idbGet('files', id);
+    if(!meta){ alert('Local metadata missing'); return; }
+    document.getElementById('editorModal').style.display='flex';
+    document.getElementById('editorModal').dataset.editing = id;
+    document.getElementById('editorTitle').innerText = 'Edit — ' + meta.title;
+    document.getElementById('editTitle').value = meta.title;
+    document.getElementById('editFilename').value = meta.filename;
+    const chunks = await idbGetChunksFor(id);
+    if(chunks && chunks.length){
+      const blob = new Blob(chunks.map(c=>c.blob), { type:'text/html' });
+      const text = await blob.text();
+      document.getElementById('editorArea').value = text;
+    } else {
+      document.getElementById('editorArea').value = '<No chunks available>';
+    }
+  }
+
+  document.getElementById('btnCloseEditor').addEventListener('click', ()=>{ hideModal('editorModal'); });
+  document.getElementById('btnSaveEdit').addEventListener('click', async ()=>{
+    const id = document.getElementById('editorModal').dataset.editing;
+    if(!id) return;
+    const replaceFile = document.getElementById('editReplaceFile').files[0];
+    const thumbFile = document.getElementById('editThumb').files[0];
+    const newTitle = (document.getElementById('editTitle').value || '').trim();
+    const newPwd = (document.getElementById('editFilePassword').value || '').trim();
+
+    // if server & admin token: prefer server edit
+    if(API_BASE && sessionStorage.getItem('admin_token')){
+      try{
+        const fd = new FormData();
+        if(replaceFile) {
+          if(replaceFile.size > MAX_CLIENT_BYTES){ alert('Replacement too large'); return; }
+          fd.append('file', replaceFile);
+        } else {
+          fd.append('fileContent', new Blob([document.getElementById('editorArea').value], { type:'text/html' }), 'edited_'+Date.now()+'.html');
+        }
+        if(thumbFile) fd.append('thumb', thumbFile);
+        fd.append('title', newTitle);
+        if(newPwd) fd.append('password', newPwd);
+        const res = await fetch(API_BASE + `/admin/edit/${id}`, { method:'POST', headers:{ 'x-admin-token': sessionStorage.getItem('admin_token') }, body: fd });
+        const j = await res.json();
+        if(!res.ok){ alert(j.error || 'Edit failed'); return; }
+        alert('Saved (server)');
+        hideModal('editorModal');
+        await loadFiles();
+        return;
+      }catch(e){ console.warn('Server edit failed, falling back to client', e); }
+    }
+
+    // client-side edit: re-write chunks and metadata
+    try{
+      const content = document.getElementById('editorArea').value;
+      const blob = new Blob([content], { type:'text/html' });
+      // delete existing chunks for this id
+      const allChunks = await idbGetAll('chunks');
+      for(const c of allChunks.filter(x=> x.fileId === id)) await idbDelete('chunks', [c.fileId, c.index]);
+      await storeFileChunksInIDB(blob, id, true);
+      const meta = await idbGet('files', id) || {};
+      meta.title = newTitle || meta.title;
+      if(newPwd) meta.filePasswordHash = await sha256hex(newPwd);
+      meta.updated = Date.now();
+      if(thumbFile) meta.thumbBase64 = await fileToBase64(thumbFile);
+      await idbPut('files', meta);
+      alert('Saved (client)');
+      hideModal('editorModal');
+      await loadFiles();
+    }catch(e){ console.error(e); alert('Edit failed: ' + (e.message || e)); }
+  });
+
+  /* ---------- Delete ---------- */
+  async function deleteFile(id, source='client'){
+    if(!confirm('Delete permanently?')) return;
+    if(source === 'server' && API_BASE && sessionStorage.getItem('admin_token')){
+      try{
+        const res = await fetch(API_BASE + `/admin/delete/${id}`, { method:'POST', headers:{ 'x-admin-token': sessionStorage.getItem('admin_token') }});
+        const j = await res.json();
+        if(!res.ok){ alert(j.error || 'Delete failed'); return; }
+        alert('Deleted (server)');
+        await loadFiles();
+        return;
+      }catch(e){ console.warn('Server delete failed', e); }
+    }
+    // client delete
+    try{
+      await idbDelete('files', id);
+      const allChunks = await idbGetAll('chunks');
+      for(const c of allChunks.filter(x=> x.fileId === id)) await idbDelete('chunks', [c.fileId, c.index]);
+      await idbDelete('uploads', id);
+      alert('Deleted (client)');
+      await loadFiles();
+    }catch(e){ console.error(e); alert('Delete failed: ' + (e.message || e)); }
+  }
+
+  /* ---------- Reset storage (admin only) ---------- */
+  document.getElementById('btnReset').addEventListener('click', async ()=>{
+    if(!isAdmin()){ alert('Only admin can reset'); return; }
+    if(!confirm('Reset ALL client-side data? This deletes local files and chunks.')) return;
+    try{
+      const req = indexedDB.deleteDatabase('pd_playstor_db_v3');
+      req.onsuccess = ()=> console.log('IndexedDB deleted');
+      req.onerror = ()=> console.warn('IndexedDB delete error');
+      localStorage.removeItem('pd_client_admin_pwd');
+      sessionStorage.removeItem('client_admin'); sessionStorage.removeItem('admin_token');
+      alert('Reset done (client). For server reset use server admin tools.');
+      await loadFiles(); updateStatus();
+    }catch(e){ console.error(e); alert('Reset failed'); }
+  });
+
+  /* ---------- Admin change password (client fallback) ---------- */
+  document.getElementById('btnChangePwd').addEventListener('click', ()=>{ document.getElementById('changePwdBox').style.display='block'; });
+  document.getElementById('btnDoChange').addEventListener('click', async ()=>{
+    const newPwd = document.getElementById('newPwd').value;
+    if(!newPwd){ alert('Enter new password'); return; }
+    if(API_BASE && sessionStorage.getItem('admin_token')){
+      try{
+        const res = await fetch(API_BASE + '/admin/change-password', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-token': sessionStorage.getItem('admin_token') }, body: JSON.stringify({ newPassword: newPwd }) });
+        const j = await res.json();
+        if(!res.ok){ alert(j.error || 'Change failed'); return; }
+        alert('Admin password changed on server'); document.getElementById('newPwd').value=''; document.getElementById('changePwdBox').style.display='none'; return;
+      }catch(e){}
+    }
+    localStorage.setItem('pd_client_admin_pwd', newPwd);
+    alert('Admin password changed locally (client fallback).');
+    document.getElementById('newPwd').value=''; document.getElementById('changePwdBox').style.display='none';
+  });
+
+  /* ---------- Initialization ---------- */
+  // attach to window for debugging
+  window._pd_playstor = {
+    idbGet, idbPut, idbGetAll, idbGetChunksFor, storeFileChunksInIDB, uploadChunksToServer
+  };
+
+  // ensure DB exists and then load files
+  try{ await openIDB(); }catch(e){ console.warn('IndexedDB init failed', e); }
+  await loadFiles();
+
+  // expose loadFiles globally (already set in earlier part)
+  if(typeof window.loadFiles !== 'function') window.loadFiles = loadFiles;
+  if(typeof window.searchFiles !== 'function') window.searchFiles = searchFiles;
+
+  console.log('PD PLAYSTOR Part-3 initialized');
+})(); // end PART3_INIT
+</script>
+<!-- ================= PD PLAYSTOR — PART 3 UPDATED (with Ask for a Game & hide admin hint) =================
+Paste this after Part-1 and Part-2 in the combined index.html (replace previous Part-3 if present).
+=============================================================================================== -->
+
+<!-- ======= Game Request Modal (Ask for a Game) ======= -->
+<div id="gameRequestModal" class="modal" aria-hidden="true">
+  <div class="modal-card">
+    <h3>Ask for a Game</h3>
+    <label>Game Name</label>
+    <input id="gameNameInput" placeholder="Enter game name (e.g. Subway Surfers)" />
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button id="btnSubmitGame" class="viewer-red">Send to WhatsApp</button>
+      <button id="btnCloseGame" class="ghost">Close</button>
+    </div>
+    <div class="hint" style="margin-top:8px;color:var(--muted)">Submit karte hi WhatsApp khulega.</div>
+  </div>
+</div>
+
+<script>
+/* ================= PART 3 UPDATED JS:
+   Adds "Ask for a Game" button & modal; hides admin password hint text.
+   This script augments the existing Part-3 functionality (upload, play, edit).
+   Drop this into your combined index.html in place of earlier Part-3 or append (ensure no duplicate functions).
+========================================================================= */
+
+(function addGameRequestFeatureAndHideHint(){
+  // WhatsApp number (with country code)
+  const WHATSAPP_GAME_NUMBER = '918747868063'; // +91 8747868063
+
+  // 1) Hide admin password hint if present
+  const loginHintEl = document.getElementById('loginHint');
+  if(loginHintEl){
+    loginHintEl.style.display = 'none';
+  }
+  // Also ensure admin password input doesn't show any placeholder/hint when opening
+  const adminPwdInput = document.getElementById('adminPwd');
+  if(adminPwdInput){
+    adminPwdInput.placeholder = '';
+    // When login modal opens, hide loginHint again (in case)
+    const originalOpenLogin = document.getElementById('btnOpenLogin');
+    if(originalOpenLogin){
+      originalOpenLogin.addEventListener('click', ()=> {
+        if(loginHintEl) loginHintEl.style.display = 'none';
+        // clear input value to avoid lingering text
+        adminPwdInput.value = '';
+      });
+    }
+  }
+
+  // 2) Insert "Ask for a Game" button next to the Viewer Info button in header (if not already added)
+  const viewerBtn = document.getElementById('btnViewerInfoHeader');
+  if(viewerBtn){
+    // Avoid duplicate
+    if(!document.getElementById('btnAskGame')){
+      const askBtn = document.createElement('button');
+      askBtn.id = 'btnAskGame';
+      askBtn.className = 'viewer-red small';
+      askBtn.style.marginLeft = '6px';
+      askBtn.innerText = 'Ask for a Game';
+      // insert after the viewer button
+      viewerBtn.parentNode.insertBefore(askBtn, viewerBtn.nextSibling);
+
+      // open modal on click
+      askBtn.addEventListener('click', ()=> {
+        // clear previous value
+        const gInput = document.getElementById('gameNameInput');
+        if(gInput) gInput.value = '';
+        showModal('gameRequestModal');
+      });
+    }
+  } else {
+    // If header button not found (rare), try appending in header right
+    const hdr = document.querySelector('header .right');
+    if(hdr && !document.getElementById('btnAskGame')){
+      const askBtn = document.createElement('button');
+      askBtn.id = 'btnAskGame';
+      askBtn.className = 'viewer-red small';
+      askBtn.innerText = 'Ask for a Game';
+      hdr.appendChild(askBtn);
+      askBtn.addEventListener('click', ()=> {
+        const gInput = document.getElementById('gameNameInput');
+        if(gInput) gInput.value = '';
+        showModal('gameRequestModal');
+      });
+    }
+  }
+
+  // 3) Wire up the modal buttons (direct WhatsApp send on submit - Option A)
+  const btnCloseGame = document.getElementById('btnCloseGame');
+  if(btnCloseGame) btnCloseGame.addEventListener('click', ()=> hideModal('gameRequestModal'));
+
+  const btnSubmitGame = document.getElementById('btnSubmitGame');
+  if(btnSubmitGame){
+    btnSubmitGame.addEventListener('click', ()=>{
+      const nameEl = document.getElementById('gameNameInput');
+      if(!nameEl) return;
+      const gameName = nameEl.value.trim();
+      if(!gameName){ alert('Please enter a game name'); return; }
+      // Build message format B: "New Game Request: <name> + Date + Time"
+      const now = new Date();
+      const message = `New Game Request: ${gameName}%0ATime: ${now.toLocaleString()}`;
+      // Open WhatsApp directly (Option A)
+      const waUrl = `https://wa.me/${WHATSAPP_GAME_NUMBER}?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+      hideModal('gameRequestModal');
+      // optional: small toast
+      try{ alert('WhatsApp opened — press Send to complete the request.'); }catch(e){}
+    });
+  }
+
+  // 4) Ensure the game modal can be closed by clicking outside (optional friendly UX)
+  (function addOutsideClickClose(){
+    const modal = document.getElementById('gameRequestModal');
+    if(!modal) return;
+    modal.addEventListener('click', (ev)=>{
+      if(ev.target === modal) hideModal('gameRequestModal');
+    });
+  })();
+
+  // 5) Ensure accessibility attributes
+  const gm = document.getElementById('gameRequestModal');
+  if(gm) gm.setAttribute('aria-hidden','true');
+
+  // 6) Ensure existing showModal/hideModal helpers exist; if not, define safe fallbacks
+  if(typeof showModal !== 'function'){
+    window.showModal = function(id){ const m=document.getElementById(id); if(m){ m.style.display='flex'; m.setAttribute('aria-hidden','false'); } };
+  }
+  if(typeof hideModal !== 'function'){
+    window.hideModal = function(id){ const m=document.getElementById(id); if(m){ m.style.display='none'; m.setAttribute('aria-hidden','true'); } };
+  }
+
+  // 7) Extra: hide any visible admin password text scattered on page (defensive)
+  Array.from(document.querySelectorAll('[id*="loginHint"], [class*="hint"], [placeholder*="password"]')).forEach(el=>{
+    // do not hide necessary hints, only hide exact loginHint handled earlier; conservative approach: skip
+  });
+
+  // Done
+  console.log('Ask for a Game feature injected; admin hint hidden.');
+})();
+</script>
+
+<!-- END OF UPDATED PART-3 -->
+<!-- PART 3 END -->
+</html>
